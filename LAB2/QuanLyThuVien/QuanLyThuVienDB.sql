@@ -1,0 +1,171 @@
+﻿USE master;
+GO
+-- Ngắt tất cả kết nối đang mở tới DB trước khi xóa
+ALTER DATABASE QuanLyThuVienDB SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+GO
+DROP DATABASE QuanLyThuVienDB;
+GO
+USE QuanLyThuVienDB;
+GO
+
+DROP TABLE IF EXISTS dbo.PhieuPhat;
+DROP TABLE IF EXISTS dbo.ChiTietPhieuMuon;
+DROP TABLE IF EXISTS dbo.PhieuMuon;
+DROP TABLE IF EXISTS dbo.TheDocGia;
+DROP TABLE IF EXISTS dbo.DocGia;
+DROP TABLE IF EXISTS dbo.DauSach;
+DROP TABLE IF EXISTS dbo.NhaXuatBan;
+DROP TABLE IF EXISTS dbo.TheLoai;
+DROP TABLE IF EXISTS dbo.NhanVien;
+GO
+USE QuanLyThuVienDB;
+GO
+
+-- Xóa dữ liệu các bảng phụ/bảng giao dịch trước (tránh lỗi Foreign Key)
+DELETE FROM dbo.PhieuPhat;
+DELETE FROM dbo.ChiTietPhieuMuon;
+DELETE FROM dbo.PhieuMuon;
+DELETE FROM dbo.TheDocGia;
+
+-- Xóa dữ liệu các bảng danh mục chính
+DELETE FROM dbo.DauSach;
+DELETE FROM dbo.DocGia;
+DELETE FROM dbo.NhaXuatBan;
+DELETE FROM dbo.TheLoai;
+DELETE FROM dbo.NhanVien;
+GO
+
+
+-- 1. Chuyển về database hệ thống
+USE master;
+GO
+
+-- 2. Kiểm tra nếu DB chưa tồn tại thì tiến hành tạo mới
+IF DB_ID(N'QuanLyThuVienDB') IS NULL
+BEGIN
+    CREATE DATABASE QuanLyThuVienDB;
+END
+GO
+
+-- 3. Chọn database vừa tạo để làm việc
+USE QuanLyThuVienDB;
+GO
+
+-- 1. Tạo các bảng CSDL
+CREATE TABLE dbo.NhanVien (
+    MaNhanVien NVARCHAR(20) NOT NULL PRIMARY KEY,
+    Ho NVARCHAR(50) NOT NULL,
+    Ten NVARCHAR(50) NOT NULL,
+    Phai NVARCHAR(10) NOT NULL,
+    NgaySinh DATE NOT NULL,
+    ChucVu NVARCHAR(80) NOT NULL,
+    SoDienThoai NVARCHAR(20) NULL
+);
+GO
+CREATE TABLE dbo.TheLoai (
+    MaTheLoai NVARCHAR(20) NOT NULL PRIMARY KEY,
+    TenTheLoai NVARCHAR(100) NOT NULL UNIQUE
+);
+GO
+CREATE TABLE dbo.NhaXuatBan (
+    MaNhaXuatBan NVARCHAR(20) NOT NULL PRIMARY KEY,
+    DiaChi NVARCHAR(250) NULL,
+    SoDienThoai NVARCHAR(20) NULL
+);
+GO
+CREATE TABLE dbo.DauSach (
+    MaDauSach NVARCHAR(20) NOT NULL PRIMARY KEY,
+    TenSach NVARCHAR(200) NOT NULL,
+    NamXuatBan INT NOT NULL,
+    SoLuongHienCo INT NOT NULL CONSTRAINT CK_DauSach_SoLuong CHECK (SoLuongHienCo >= 0),
+    MaTheLoai NVARCHAR(20) NOT NULL,
+    MaNhaXuatBan NVARCHAR(20) NOT NULL,
+    CONSTRAINT FK_DauSach_TheLoai FOREIGN KEY (MaTheLoai) REFERENCES dbo.TheLoai(MaTheLoai),
+    CONSTRAINT FK_DauSach_NXB FOREIGN KEY (MaNhaXuatBan) REFERENCES dbo.NhaXuatBan(MaNhaXuatBan)
+);
+GO
+CREATE TABLE dbo.DocGia (
+    MaDocGia NVARCHAR(20) NOT NULL PRIMARY KEY,
+    Ho NVARCHAR(50) NOT NULL,
+    Ten NVARCHAR(50) NOT NULL,
+    NgaySinh DATE NOT NULL,
+    Phai NVARCHAR(10) NOT NULL,
+    SoDienThoai NVARCHAR(20) NULL,
+    DiaChi NVARCHAR(250) NOT NULL,
+    Email NVARCHAR(150) NOT NULL,
+    Anh3x4 NVARCHAR(260) NULL
+);
+GO
+CREATE TABLE dbo.TheDocGia (
+    MaThe NVARCHAR(30) NOT NULL PRIMARY KEY,
+    MaDocGia NVARCHAR(20) NOT NULL,
+    NgayCap DATE NOT NULL,
+    HanSuDung DATE NOT NULL,
+    DaDongLePhi BIT NOT NULL,
+    TrangThai BIT NOT NULL CONSTRAINT DF_TheDocGia_TrangThai DEFAULT(1),
+    CONSTRAINT CK_TheDocGia_Han CHECK (HanSuDung >= NgayCap),
+    CONSTRAINT FK_TheDocGia_DocGia FOREIGN KEY (MaDocGia) REFERENCES dbo.DocGia(MaDocGia)
+);
+GO
+CREATE UNIQUE INDEX UX_TheDocGia_MotTheHoatDong ON dbo.TheDocGia(MaDocGia) WHERE TrangThai = 1;
+GO
+CREATE TABLE dbo.PhieuMuon (
+    MaPhieuMuon NVARCHAR(30) NOT NULL PRIMARY KEY,
+    MaDocGia NVARCHAR(20) NOT NULL,
+    MaNhanVien NVARCHAR(20) NOT NULL,
+    NgayMuon DATE NOT NULL,
+    NgayHenTra DATE NOT NULL,
+    CONSTRAINT CK_PhieuMuon_Ngay CHECK (NgayHenTra >= NgayMuon),
+    CONSTRAINT FK_PhieuMuon_DocGia FOREIGN KEY (MaDocGia) REFERENCES dbo.DocGia(MaDocGia),
+    CONSTRAINT FK_PhieuMuon_NhanVien FOREIGN KEY (MaNhanVien) REFERENCES dbo.NhanVien(MaNhanVien)
+);
+GO
+CREATE TABLE dbo.ChiTietPhieuMuon (
+    MaChiTiet NVARCHAR(35) NOT NULL PRIMARY KEY,
+    MaPhieuMuon NVARCHAR(30) NOT NULL,
+    MaDauSach NVARCHAR(20) NOT NULL,
+    NgayTraThucTe DATE NULL,
+    TinhTrangTra NVARCHAR(50) NULL,
+    CONSTRAINT UQ_CTPM_Phieu_DauSach UNIQUE (MaPhieuMuon, MaDauSach),
+    CONSTRAINT FK_CTPM_PhieuMuon FOREIGN KEY (MaPhieuMuon) REFERENCES dbo.PhieuMuon(MaPhieuMuon),
+    CONSTRAINT FK_CTPM_DauSach FOREIGN KEY (MaDauSach) REFERENCES dbo.DauSach(MaDauSach)
+);
+GO
+CREATE TABLE dbo.PhieuPhat (
+    MaPhieuPhat NVARCHAR(35) NOT NULL PRIMARY KEY,
+    MaChiTiet NVARCHAR(35) NOT NULL,
+    MaNhanVien NVARCHAR(20) NOT NULL,
+    NgayPhat DATE NOT NULL,
+    LyDo NVARCHAR(250) NOT NULL,
+    PhiPhat DECIMAL(18,0) NOT NULL CONSTRAINT CK_PhieuPhat_Phi CHECK (PhiPhat >= 0),
+    CONSTRAINT FK_PhieuPhat_CTPM FOREIGN KEY (MaChiTiet) REFERENCES dbo.ChiTietPhieuMuon(MaChiTiet),
+    CONSTRAINT FK_PhieuPhat_NhanVien FOREIGN KEY (MaNhanVien) REFERENCES dbo.NhanVien(MaNhanVien)
+);
+GO
+GO
+-- 2. Chèn dữ liệu mẫu (Sample Data)
+INSERT INTO dbo.NhanVien (MaNhanVien, Ho, Ten, Phai, NgaySinh, ChucVu, SoDienThoai) VALUES
+(N'NV001', N'Nguyễn', N'An', N'Nam', '1990-02-15', N'Thủ thư', N'0901000001'),
+(N'NV002', N'Trần', N'Bình', N'Nữ', '1992-08-20', N'Nhân viên quản lý sách', N'0901000002');
+
+INSERT INTO dbo.TheLoai (MaTheLoai, TenTheLoai) VALUES
+(N'TL001', N'Tin học'), (N'TL002', N'Tiểu thuyết'), (N'TL003', N'Anh văn'), (N'TL004', N'Truyện ngắn');
+
+INSERT INTO dbo.NhaXuatBan (MaNhaXuatBan, DiaChi, SoDienThoai) VALUES
+(N'NXB001', N'Quận 1, TP.HCM', N'0283000001'),
+(N'NXB002', N'Quận Cầu Giấy, Hà Nội', N'0243000002');
+
+INSERT INTO dbo.DauSach (MaDauSach, TenSach, NamXuatBan, SoLuongHienCo, MaTheLoai, MaNhaXuatBan) VALUES
+(N'S001', N'Lập trình C# căn bản', 2025, 5, N'TL001', N'NXB001'),
+(N'S002', N'Cơ sở dữ liệu', 2024, 4, N'TL001', N'NXB001'),
+(N'S003', N'Mạng máy tính', 2023, 3, N'TL001', N'NXB002'),
+(N'S004', N'Tiếng Anh chuyên ngành', 2024, 2, N'TL003', N'NXB002');
+
+INSERT INTO dbo.DocGia (MaDocGia, Ho, Ten, NgaySinh, Phai, SoDienThoai, DiaChi, Email, Anh3x4) VALUES
+(N'DG001', N'Lê', N'Minh', '2003-05-12', N'Nam', N'0911000001', N'TP.HCM', N'minh@example.com', NULL),
+(N'DG002', N'Phạm', N'Lan', '2002-10-23', N'Nữ', N'0911000002', N'TP.HCM', N'lan@example.com', NULL);
+
+INSERT INTO dbo.TheDocGia (MaThe, MaDocGia, NgayCap, HanSuDung, DaDongLePhi, TrangThai) VALUES
+(N'THE_DG001_2026', N'DG001', '2026-01-01', '2026-12-31', 1, 1),
+(N'THE_DG002_2026', N'DG002', '2026-01-01', '2026-12-31', 1, 1);
+GO
