@@ -24,4 +24,6 @@ LAB_AT_OOSD/
 │   └── README.md
 ├── LAB5/                      # Hệ thống Quản lý Công ty Du lịch Văn Hóa Việt
 │   └── README.md
+├── LAB6/                      # Hệ thống Quản lý Hồ sơ bệnh án của bệnh nhân
+│   └── README.md
 └── README.md                  # File tổng quan dự án
