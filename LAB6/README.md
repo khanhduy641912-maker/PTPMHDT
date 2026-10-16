@@ -3,7 +3,7 @@
 > **Môn học:** Phát triển Phần mềm Hướng đối tượng (PTPMHDT)  
 > **Sinh viên thực hiện:** Nguyễn Khánh Duy  
 > **MSSV:** 1250080038  
-> **Lớp:** 12_ĐH_CNPM1 — Trường Đại học Công nghệ TP.HCM (HUTECH)
+> **Lớp:** 12_ĐH_CNPM1 
 
 ---
 
