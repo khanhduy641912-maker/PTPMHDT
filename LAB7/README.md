@@ -12,6 +12,7 @@ Hệ thống tin học hóa quy trình Quản lý Nhân sự tại Công ty Sơn
 ---
 
 ## 2. CẤU TRÚC THƯ MỤC THƯỜNG TRỰC
+```text
 Buoi8/
 ├── LAB7.drawio                  # Sơ đồ thiết kế UML (Use Case, Class, Activity, Sequence Diagram)
 ├── LAB7_Bai_7_Quan_ly_nhan_su.docx # Báo cáo chi tiết đồ án Bài 7
