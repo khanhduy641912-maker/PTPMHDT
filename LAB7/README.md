@@ -47,7 +47,7 @@ Buoi8/
     │               ├── FrmChamCong.java              # Giao diện Bảng chấm công theo phòng ban
     │               └── FrmTinhLuong.java             # Giao diện Bảng tính lương tự động
     └── README.md
-
+```
 ---
 
 ## 3. CÁC TÍNH NĂNG CHÍNH
