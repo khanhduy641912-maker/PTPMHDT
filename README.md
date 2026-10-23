@@ -10,7 +10,7 @@
 
 ## Tổng quan nội dung Repository
 
-Repository lưu trữ toàn bộ các bài tập thực hành theo tiến trình môn học từ LAB 1 đến LAB 5, bao gồm phân tích nghiệp vụ, mô hình hóa phần mềm (UML), thiết kế cơ sở dữ liệu SQL Server và hiện thực phần mềm ứng dụng theo kiến trúc phân tầng (UI → Service → Data).
+Repository lưu trữ toàn bộ các bài tập thực hành theo tiến trình môn học từ LAB 1 đến LAB 7, bao gồm phân tích nghiệp vụ, mô hình hóa phần mềm (UML), thiết kế cơ sở dữ liệu SQL Server và hiện thực phần mềm ứng dụng theo kiến trúc phân tầng (UI → Service → Data).
 
 ```text
 LAB_AT_OOSD/
