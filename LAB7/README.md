@@ -90,7 +90,7 @@ Buoi8/
 1. Mở file `src/com/quanlynhansu/data/Database.java`.
 2. Thay đổi thông tin `SERVER_NAME` và `PASSWORD` cho phù hợp với máy cá nhân:
    ```java
-   private static final String SERVER_NAME = "LAPTOP-6VL0VPIP";
+   private static final String SERVER_NAME = "Server_name";
    private static final String DATABASE_NAME = "QuanLyNhanSu";
    private static final String USER = "sa";
    private static final String PASSWORD = "mật_khẩu_của_bạn";
