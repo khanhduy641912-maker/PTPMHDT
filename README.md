@@ -26,6 +26,6 @@ LAB_AT_OOSD/
 │   └── README.md
 ├── LAB6/                      # Hệ thống Quản lý Hồ sơ bệnh án của bệnh nhân
 │   └── README.md
-├── LAB7/                      # Hệ thống Quản lý Nhân viên công ty Tây Đông Á
+├── LAB7/                      # Hệ thống Quản lý Nhân viên công ty Sơn Đông Á
 │   └── README.md
 └── README.md                  # File tổng quan dự án
