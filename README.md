@@ -28,4 +28,6 @@ LAB_AT_OOSD/
 │   └── README.md
 ├── LAB7/                      # Hệ thống Quản lý Nhân viên công ty Sơn Đông Á
 │   └── README.md
+├── LAB8/                      # Quản lý cho thuê văn phòng cao ốc
+│   └── README.md
 └── README.md                  # File tổng quan dự án
