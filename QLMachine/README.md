@@ -5,7 +5,8 @@
 - Trường Đại học Tài nguyên và Môi trường TP. Hồ Chí Minh (HCMUNRE) 
 - Môn học: Phân tích và thiết kế hệ thống thông tin (OOSD) 
 - Sinh viên: Nguyễn Khánh Duy 
-- MSSV: 1250080038 
+- MSSV: 1250080038
+- Lớp: 12_ĐH_CNPM1
 - Tên đề tài: Phân tích, thiết kế và xây dựng hệ thống cho thuê máy nông nghiệp (AGR-04)
 
 ## Giới thiệu
