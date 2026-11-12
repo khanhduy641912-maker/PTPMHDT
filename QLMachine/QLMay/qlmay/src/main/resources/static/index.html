@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title> Tìm và thuê máy nông nghiệp</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body { font-size: 1.05rem; }
+        .large-text { font-size: 1.25rem !important; }
+    </style>
+</head>
+<body class="bg-light" id="mainBody">
+<nav class="navbar navbar-expand-lg navbar-dark bg-success sticky-top p-3">
+    <div class="container">
+        <span class="navbar-brand fw-bold fs-4"> THUÊ MÁY NÔNG NGHIỆP</span>
+        <div class="d-flex align-items-center text-white">
+            <button onclick="toggleLargeFont()" class="btn btn-warning btn-sm me-3">Chữ lớn</button>
+            <span id="userInfo" class="me-3 fw-bold"></span>
+            <button onclick="openMyBookingsModal()" class="btn btn-outline-light btn-sm me-2">Đơn của tôi</button>
+            <button onclick="App.logout()" class="btn btn-outline-light btn-sm">Đăng xuất</button>
+        </div>
+    </div>
+</nav>
+<main class="container my-4">
+    <div class="card p-3 mb-4 border-success">
+        <label for="searchInput" class="form-label fw-bold text-success">Tìm theo tên hoặc loại máy</label>
+        <input id="searchInput" class="form-control form-control-lg" oninput="filterMachines()" placeholder="Ví dụ: Kubota, máy cày, máy gặt">
+        <div class="form-text">Chọn khung giờ thuê để hệ thống kiểm tra lịch đặt, lịch bảo trì và tài xế trước khi tạo đơn.</div>
+    </div>
+    <h3 class="text-success fw-bold mb-3">Danh sách máy nông nghiệp</h3>
+    <div id="machineList" class="row g-3"></div>
+</main>
+
+<div class="modal fade" id="bookingModal" tabindex="-1">
+    <div class="modal-dialog modal-lg"><div class="modal-content">
+        <div class="modal-header bg-success text-white">
+            <h4 class="modal-title">Đặt lịch thuê máy</h4>
+            <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <input id="selectedMachineId" type="hidden">
+            <div class="alert alert-secondary" id="availabilityMessage">Chọn thời gian để kiểm tra lịch.</div>
+            <label class="form-label">Bắt đầu</label><input id="startTime" type="datetime-local" class="form-control mb-3" onchange="checkSlotAndLoadOperators()">
+            <label class="form-label">Kết thúc</label><input id="endTime" type="datetime-local" class="form-control mb-3" onchange="checkSlotAndLoadOperators()">
+            <label class="form-label">Địa chỉ khu vực làm việc (tùy chọn)</label><input id="fieldAddress" maxlength="255" class="form-control mb-3" placeholder="Ấp/xã, huyện hoặc địa chỉ thửa ruộng">
+            <label class="form-label">Tài xế (không bắt buộc)</label><select id="operatorSelect" class="form-select mb-2"></select>
+            <div id="feeEstimate" class="fw-bold text-success"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+            <button class="btn btn-success fw-bold" onclick="submitBooking()">Kiểm tra và đặt máy</button>
+        </div>
+    </div></div>
+</div>
+<div class="modal fade" id="myBookingsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl"><div class="modal-content">
+        <div class="modal-header bg-primary text-white">
+            <h4 class="modal-title">Đơn đặt máy của tôi</h4>
+            <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body"><div class="table-responsive">
+            <table class="table table-bordered align-middle">
+                <thead class="table-dark"><tr><th>Mã</th><th>Máy</th><th>Thời gian</th><th>Địa điểm</th><th>Tổng phí</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+                <tbody id="myBookingsTableBody"></tbody>
+            </table>
+        </div></div>
+    </div></div>
+</div>
+<script src="/app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let user;
+    let globalMachines = [];
+    const bookingModal = new bootstrap.Modal(document.getElementById('bookingModal'));
+    const myBookingsModal = new bootstrap.Modal(document.getElementById('myBookingsModal'));
+
+    App.requireRole('FARMER').then(currentUser => {
+        user = currentUser;
+        document.getElementById('userInfo').innerText = `Xin chào ${user.fullName}`;
+        loadMachines();
+        window.setInterval(loadMachines, 60000);
+    }).catch(() => {});
+
+    function toggleLargeFont() { document.getElementById('mainBody').classList.toggle('large-text'); }
+
+    async function loadMachines() {
+        const res = await fetch('/api/machines');
+        if (!res.ok) return showRequestError(res, 'Không thể tải danh sách máy.');
+        globalMachines = await res.json();
+        filterMachines();
+    }
+
+    function filterMachines() {
+        const keyword = document.getElementById('searchInput').value.trim().toLocaleLowerCase('vi');
+        const machines = globalMachines.filter(m => !keyword
+            || m.name.toLocaleLowerCase('vi').includes(keyword)
+            || m.type.toLocaleLowerCase('vi').includes(keyword));
+        const container = document.getElementById('machineList');
+        container.innerHTML = machines.map(m => `
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 shadow-sm border-2 ${m.status === 'IN_MAINTENANCE' ? 'border-warning' : 'border-success'}">
+                    <div class="card-body d-flex flex-column">
+                        <h4 class="card-title text-success fw-bold">${App.escape(m.name)}</h4>
+                        <p class="mb-1">Loại: <strong>${App.escape(m.type)}</strong></p>
+                        <p class="mb-1">Chủ máy: ${App.escape(m.owner?.fullName)}</p>
+                        <p class="mb-2">Giá thuê: <strong class="text-primary">${money(m.hourlyRate)}/giờ</strong></p>
+                        <p class="mb-3">Trạng thái hiện tại: <span class="badge text-bg-${statusColor(m.status)}">${App.escape(m.status)}</span></p>
+                        <button onclick="openBookingModal(${m.machineId})" class="btn btn-success mt-auto">Chọn khung giờ thuê</button>
+                    </div>
+                </div>
+            </div>`).join('') || '<div class="col-12"><div class="alert alert-info">Không tìm thấy máy phù hợp.</div></div>';
+    }
+
+    async function openBookingModal(machineId) {
+        document.getElementById('selectedMachineId').value = machineId;
+        document.getElementById('startTime').value = '';
+        document.getElementById('endTime').value = '';
+        document.getElementById('fieldAddress').value = '';
+        document.getElementById('availabilityMessage').className = 'alert alert-secondary';
+        document.getElementById('availabilityMessage').innerText = 'Chọn thời gian để kiểm tra lịch đặt và bảo trì.';
+        document.getElementById('feeEstimate').innerText = '';
+        await loadOperatorsSelect();
+        bookingModal.show();
+    }
+
+    async function checkSlotAndLoadOperators() {
+        const machineId = document.getElementById('selectedMachineId').value;
+        const startTime = document.getElementById('startTime').value;
+        const endTime = document.getElementById('endTime').value;
+        await loadOperatorsSelect(startTime, endTime);
+        updateFeeEstimate();
+        const message = document.getElementById('availabilityMessage');
+        if (!startTime || !endTime || new Date(endTime) <= new Date(startTime)) {
+            message.className = 'alert alert-secondary';
+            message.innerText = 'Chọn thời gian kết thúc sau thời gian bắt đầu.';
+            return;
+        }
+        const params = new URLSearchParams({ startTime, endTime });
+        const res = await fetch(`/api/machines/${machineId}/availability?${params}`);
+        if (!res.ok) return showRequestError(res, 'Không thể kiểm tra lịch máy.');
+        const result = await res.json();
+        message.className = `alert ${result.available ? 'alert-success' : 'alert-danger'}`;
+        message.innerText = result.reason;
+    }
+
+    async function loadOperatorsSelect(startTime, endTime) {
+        const params = new URLSearchParams();
+        if (startTime && endTime) {
+            params.set('startTime', startTime);
+            params.set('endTime', endTime);
+        }
+        const res = await fetch(`/api/operators${params.size ? `?${params}` : ''}`);
+        if (!res.ok) return showRequestError(res, 'Không thể tải danh sách tài xế.');
+        const operators = await res.json();
+        const select = document.getElementById('operatorSelect');
+        const previous = select.value;
+        select.innerHTML = '<option value="">Tự vận hành (không thuê tài xế)</option>' + operators.map(o =>
+            `<option value="${o.operatorId}">${App.escape(o.user?.fullName || o.licenseNo)} (+${money(o.hourlyRate)}/giờ)</option>`
+        ).join('');
+        if ([...select.options].some(option => option.value === previous)) select.value = previous;
+    }
+
+    function updateFeeEstimate() {
+        const machineId = Number(document.getElementById('selectedMachineId').value);
+        const machine = globalMachines.find(item => item.machineId === machineId);
+        const start = new Date(document.getElementById('startTime').value);
+        const end = new Date(document.getElementById('endTime').value);
+        const operator = [...document.getElementById('operatorSelect').options]
+            .find(option => option.value === document.getElementById('operatorSelect').value);
+        if (!machine || !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {
+            document.getElementById('feeEstimate').innerText = '';
+            return;
+        }
+        const minutes = Math.ceil((end - start) / 60000);
+        const hours = Math.ceil(minutes / 30) / 2;
+        const operatorRate = operator?.value
+            ? Number(operator.textContent.match(/\+([\d.]+)/)?.[1]?.replaceAll('.', '') || 0) : 0;
+        const total = hours * (Number(machine.hourlyRate) + operatorRate);
+        document.getElementById('feeEstimate').innerText = `Ước tính: ${hours} giờ tính phí — ${money(total)}. Backend sẽ tính lại khi lưu đơn.`;
+    }
+
+    document.getElementById('operatorSelect').addEventListener('change', updateFeeEstimate);
+
+    async function submitBooking() {
+        const machineId = Number(document.getElementById('selectedMachineId').value);
+        const startTime = document.getElementById('startTime').value;
+        const endTime = document.getElementById('endTime').value;
+        const operatorId = document.getElementById('operatorSelect').value;
+        if (!startTime || !endTime || new Date(endTime) <= new Date(startTime)) {
+            return Swal.fire('Thời gian chưa hợp lệ', 'Chọn giờ kết thúc sau giờ bắt đầu.', 'warning');
+        }
+        if ((new Date(endTime) - new Date(startTime)) / 60000 < 60) {
+            return Swal.fire('Thời lượng chưa đủ', 'Thời gian thuê tối thiểu là 1 giờ.', 'warning');
+        }
+        const res = await fetch('/api/bookings', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                machine: { machineId },
+                operator: operatorId ? { operatorId: Number(operatorId) } : null,
+                startTime, endTime,
+                fieldAddress: document.getElementById('fieldAddress').value.trim()
+            })
+        });
+        if (!res.ok) return showRequestError(res, 'Đặt máy thất bại.');
+        const booking = await res.json();
+        bookingModal.hide();
+        await loadMachines();
+        Swal.fire('Đã gửi yêu cầu', `Đơn #${booking.bookingId} đang chờ chủ máy duyệt. Tổng phí dự kiến ${money(booking.totalFee)}.`, 'success');
+    }
+
+    async function openMyBookingsModal() {
+        const res = await fetch('/api/bookings');
+        if (!res.ok) return showRequestError(res, 'Không thể tải đơn của bạn.');
+        const bookings = await res.json();
+        document.getElementById('myBookingsTableBody').innerHTML = bookings.map(b => {
+            let actions = '';
+            if (b.status === 'PENDING') {
+                actions = `<button class="btn btn-sm btn-outline-danger" onclick="cancelBooking(${b.bookingId})">Hủy đơn</button>`;
+            } else if (b.status === 'CONFIRMED') {
+                actions = `<button class="btn btn-sm btn-warning" onclick="recordHandover(${b.bookingId}, 'CHECK_IN')">CHECK_IN</button>`;
+            } else if (b.status === 'IN_PROGRESS') {
+                actions = `<button class="btn btn-sm btn-success" onclick="recordHandover(${b.bookingId}, 'CHECK_OUT')">CHECK_OUT</button>`;
+            }
+            return `<tr><td>#${b.bookingId}</td><td>${App.escape(b.machine?.name)}</td>
+                <td>${formatDate(b.startTime)}<br>→ ${formatDate(b.endTime)}</td><td>${App.escape(b.fieldAddress)}</td>
+                <td>${money(b.totalFee)}</td><td><span class="badge text-bg-${statusColor(b.status)}">${App.escape(b.status)}</span></td><td>${actions || '—'}</td></tr>`;
+        }).join('') || '<tr><td colspan="7" class="text-center text-muted">Bạn chưa có đơn thuê máy.</td></tr>';
+        myBookingsModal.show();
+    }
+
+    async function cancelBooking(id) {
+        if (!(await Swal.fire({ title: `Hủy đơn #${id}?`, showCancelButton: true, confirmButtonText: 'Hủy đơn' })).isConfirmed) return;
+        const res = await fetch(`/api/bookings/${id}/cancel`, { method: 'PUT' });
+        if (!res.ok) return showRequestError(res, 'Không thể hủy đơn.');
+        await Promise.all([openMyBookingsModal(), loadMachines()]);
+    }
+
+    async function recordHandover(id, type) {
+        let pending;
+        try {
+            pending = await App.getPendingHandover(id, type);
+        } catch (error) {
+            return Swal.fire('Không thực hiện được', error.message, 'error');
+        }
+        if (pending?.completed) {
+            return Swal.fire('Biên bản đã tồn tại',
+                pending.legacy ? 'Biên bản được lưu từ phiên bản trước; không thể xác nhận bổ sung.' : 'Biên bản đã có xác nhận của hai phía.',
+                'info');
+        }
+        if (pending) {
+            if (!(await Swal.fire({ title: 'Xác nhận biên bản hiện có?', text: 'Đối chiếu tình trạng máy với bên còn lại trước khi ký.',
+                showCancelButton: true, confirmButtonText: 'Tôi xác nhận' })).isConfirmed) return;
+            const signed = await App.signHandover(id, pending.handoverId);
+            if (!signed.ok) return showRequestError(signed, 'Không thể xác nhận biên bản.');
+            await openMyBookingsModal();
+            return Swal.fire('Đã đủ chữ ký', 'Trạng thái đơn đã được cập nhật theo biên bản.', 'success');
+        }
+        const result = await Swal.fire({
+            title: `${type === 'CHECK_IN' ? 'Nhận máy' : 'Trả máy'} - đơn #${id}`,
+            html: `<input id="swalOdometer" type="number" min="0" class="swal2-input" placeholder="Chỉ số đồng hồ">
+                <input id="swalFuel" type="number" min="0" max="100" step="0.1" class="swal2-input" placeholder="Nhiên liệu (%)">
+                <textarea id="swalCondition" class="swal2-textarea" placeholder="Tình trạng máy / hư hỏng"></textarea>
+                <textarea id="swalRemarks" class="swal2-textarea" placeholder="Ghi chú"></textarea>`,
+            showCancelButton: true, confirmButtonText: 'Lưu biên bản',
+            preConfirm: () => {
+                const odometer = Number(document.getElementById('swalOdometer').value);
+                const fuelPercent = Number(document.getElementById('swalFuel').value);
+                const machineCondition = document.getElementById('swalCondition').value.trim();
+                if (!Number.isInteger(odometer) || odometer < 0 || !Number.isFinite(fuelPercent)
+                    || fuelPercent < 0 || fuelPercent > 100 || !machineCondition) {
+                    Swal.showValidationMessage('Nhập chỉ số, nhiên liệu 0–100% và tình trạng máy.');
+                    return false;
+                }
+                return { type, odometer, fuelPercent, machineCondition, remarks: document.getElementById('swalRemarks').value.trim() };
+            }
+        });
+        if (!result.isConfirmed) return;
+        const res = await fetch(`/api/bookings/${id}/handovers`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(result.value)
+        });
+        if (!res.ok) return showRequestError(res, 'Không thể lưu biên bản.');
+        await openMyBookingsModal();
+        Swal.fire('Đang chờ xác nhận', 'Biên bản đã được lưu; bên còn lại cần đăng nhập và xác nhận.', 'info');
+    }
+
+    async function showRequestError(response, fallback) {
+        Swal.fire('Không thực hiện được', await App.errorMessage(response, fallback), 'error');
+    }
+    function money(value) { return `${Number(value || 0).toLocaleString('vi-VN')} đ`; }
+    function formatDate(value) { return value ? new Date(value).toLocaleString('vi-VN') : ''; }
+    function statusColor(status) {
+        return ({ PENDING: 'warning', CONFIRMED: 'primary', IN_PROGRESS: 'info', COMPLETED: 'success',
+            CANCELLED: 'secondary', RESERVED: 'warning', IN_MAINTENANCE: 'danger', AVAILABLE: 'success' })[status] || 'secondary';
+    }
+</script>
+</body>
+</html>

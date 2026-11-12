@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title> Quản trị hệ thống</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>body { visibility: hidden; }</style>
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-dark bg-dark sticky-top">
+    <div class="container">
+        <span class="navbar-brand fw-bold text-success"> ADMIN</span>
+        <div class="text-white"><span id="userInfo" class="me-3"></span>
+            <button onclick="App.logout()" class="btn btn-outline-danger btn-sm">Đăng xuất</button></div>
+    </div>
+</nav>
+<main class="container my-4">
+    <div class="row g-3 mb-4">
+        <div class="col-md-3"><div class="card bg-primary text-white p-3"><div>Đơn đặt máy</div><h2 id="bookingCount">0</h2></div></div>
+        <div class="col-md-3"><div class="card bg-success text-white p-3"><div>Máy trên sàn</div><h2 id="machineCount">0</h2></div></div>
+        <div class="col-md-3"><div class="card bg-warning p-3"><div>Tài xế đủ điều kiện</div><h2 id="operatorCount">0</h2></div></div>
+        <div class="col-md-3"><div class="card bg-info text-white p-3"><div>Lịch bảo trì</div><h2 id="maintenanceCount">0</h2></div></div>
+    </div>
+    <div class="row g-3 mb-4">
+        <div class="col-lg-6"><div class="card p-3"><h6>Trạng thái đơn</h6><canvas id="statusChart"></canvas></div></div>
+        <div class="col-lg-6"><div class="card p-3"><h6>Doanh thu ghi nhận theo loại máy</h6><canvas id="revenueChart"></canvas></div></div>
+    </div>
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#bookingTab">Đơn đặt máy</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#machineTab">Máy</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#operatorTab">Duyệt tài xế</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#maintenanceTab">Bảo trì</button></li>
+    </ul>
+    <div class="tab-content">
+        <section class="tab-pane fade show active" id="bookingTab">
+            <div class="card p-3">
+                <div class="d-flex justify-content-between mb-3">
+                    <h5>Giám sát đơn toàn hệ thống</h5>
+                    <div><button class="btn btn-outline-success btn-sm me-2" onclick="exportBookings()">Xuất CSV</button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="refreshAll()">Làm mới</button></div>
+                </div>
+                <div class="table-responsive"><table class="table table-hover align-middle">
+                    <thead class="table-dark"><tr><th>Mã</th><th>Nông dân</th><th>Máy</th><th>Tài xế</th><th>Thời gian</th><th>Phí</th><th>Trạng thái</th><th></th></tr></thead>
+                    <tbody id="bookingRows"></tbody>
+                </table></div>
+            </div>
+        </section>
+        <section class="tab-pane fade" id="machineTab">
+            <div class="card p-3"><h5>Danh mục máy</h5><div class="table-responsive">
+                <table class="table table-striped"><thead><tr><th>Mã</th><th>Tên máy</th><th>Chủ máy</th><th>Loại</th><th>Giá/giờ</th><th>Trạng thái</th><th></th></tr></thead>
+                    <tbody id="machineRows"></tbody></table>
+            </div></div>
+        </section>
+        <section class="tab-pane fade" id="operatorTab">
+            <div class="card p-3"><h5>Hồ sơ tài xế và cờ đủ điều kiện</h5><div class="table-responsive">
+                <table class="table table-striped align-middle"><thead><tr><th>Mã</th><th>Tài xế</th><th>Bằng cấp</th><th>Giá/giờ</th><th>Trạng thái</th><th></th></tr></thead>
+                    <tbody id="operatorRows"></tbody></table>
+            </div></div>
+        </section>
+        <section class="tab-pane fade" id="maintenanceTab">
+            <div class="card p-3"><h5>Lịch bảo trì máy</h5><div class="table-responsive">
+                <table class="table table-striped align-middle"><thead><tr><th>Máy</th><th>Chủ máy</th><th>Bắt đầu</th><th>Kết thúc</th><th>Nội dung</th><th>Trạng thái</th><th></th></tr></thead>
+                    <tbody id="maintenanceRows"></tbody></table>
+            </div></div>
+        </section>
+    </div>
+</main>
+<script src="/app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let statusChart;
+    let revenueChart;
+    App.requireRole('ADMIN').then(user => {
+        document.getElementById('userInfo').innerText = `Quản trị viên: ${user.fullName}`;
+        refreshAll();
+        window.setInterval(refreshAll, 30000);
+    }).catch(() => {});
+
+    async function refreshAll() {
+        await Promise.all([loadBookings(), loadMachines(), loadOperators(), loadMaintenances()]);
+    }
+
+    async function loadBookings() {
+        const res = await fetch('/api/bookings');
+        if (!res.ok) return showRequestError(res, 'Không thể tải đơn.');
+        const bookings = await res.json();
+        document.getElementById('bookingCount').innerText = bookings.length;
+        document.getElementById('bookingRows').innerHTML = bookings.map(b => {
+            const actions = b.status === 'PENDING'
+                ? `<button class="btn btn-sm btn-success me-1" onclick="bookingAction(${b.bookingId}, 'confirm')">Duyệt</button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="bookingAction(${b.bookingId}, 'reject')">Từ chối</button>`
+                : '<span class="text-muted">Theo dõi</span>';
+            return `<tr><td>#${b.bookingId}</td><td>${App.escape(b.farmer?.fullName)}</td>
+                <td>${App.escape(b.machine?.name)}</td><td>${App.escape(b.operator?.user?.fullName || 'Tự vận hành')}</td>
+                <td>${formatDate(b.startTime)}<br>→ ${formatDate(b.endTime)}</td><td>${money(b.totalFee)}</td>
+                <td><span class="badge text-bg-${statusColor(b.status)}">${App.escape(b.status)}</span></td><td>${actions}</td></tr>`;
+        }).join('') || '<tr><td colspan="8" class="text-center">Chưa có đơn.</td></tr>';
+        renderCharts(bookings);
+    }
+
+    async function bookingAction(id, action) {
+        if (!(await Swal.fire({ title: `${action === 'confirm' ? 'Duyệt' : 'Từ chối'} đơn #${id}?`,
+            showCancelButton: true, confirmButtonText: 'Xác nhận' })).isConfirmed) return;
+        const res = await fetch(`/api/bookings/${id}/${action}`, { method: 'PUT' });
+        if (!res.ok) return showRequestError(res, 'Không thể cập nhật đơn.');
+        await loadBookings();
+    }
+
+    async function loadMachines() {
+        const res = await fetch('/api/machines');
+        if (!res.ok) return showRequestError(res, 'Không thể tải máy.');
+        const machines = await res.json();
+        document.getElementById('machineCount').innerText = machines.length;
+        document.getElementById('machineRows').innerHTML = machines.map(m => `
+            <tr><td>M-${m.machineId}</td><td>${App.escape(m.name)}</td><td>${App.escape(m.owner?.fullName)}</td>
+                <td>${App.escape(m.type)}</td><td><input id="rate-${m.machineId}" type="number" min="1" class="form-control form-control-sm" value="${Number(m.hourlyRate)}"></td>
+                <td><span class="badge text-bg-${statusColor(m.status)}">${App.escape(m.status)}</span></td>
+                <td><button class="btn btn-sm btn-outline-primary" onclick="updateRate(${m.machineId})">Lưu giá</button></td></tr>`).join('');
+    }
+
+    async function updateRate(id) {
+        const hourlyRate = Number(document.getElementById(`rate-${id}`).value);
+        if (!Number.isFinite(hourlyRate) || hourlyRate <= 0) return Swal.fire('Giá không hợp lệ', 'Giá phải lớn hơn 0.', 'warning');
+        const res = await fetch(`/api/machines/${id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hourlyRate })
+        });
+        if (!res.ok) return showRequestError(res, 'Không thể cập nhật giá.');
+        await loadMachines();
+    }
+
+    async function loadOperators() {
+        const res = await fetch('/api/operators');
+        if (!res.ok) return showRequestError(res, 'Không thể tải hồ sơ tài xế.');
+        const operators = await res.json();
+        document.getElementById('operatorCount').innerText = operators.filter(o => o.isEligible).length;
+        document.getElementById('operatorRows').innerHTML = operators.map(o => `
+            <tr><td>OP-${o.operatorId}</td><td>${App.escape(o.user?.fullName)}</td><td>${App.escape(o.licenseNo)}</td>
+                <td>${money(o.hourlyRate)}/giờ</td><td><span class="badge text-bg-${o.isEligible ? 'success' : 'warning'}">${o.isEligible ? 'Đủ điều kiện' : 'Chờ duyệt/khóa'}</span></td>
+                <td><button class="btn btn-sm btn-${o.isEligible ? 'outline-danger' : 'success'}"
+                    onclick="setEligibility(${o.operatorId}, ${!o.isEligible})">${o.isEligible ? 'Thu hồi' : 'Duyệt'}</button></td></tr>`).join('')
+            || '<tr><td colspan="6" class="text-center">Chưa có hồ sơ tài xế.</td></tr>';
+    }
+
+    async function setEligibility(id, eligible) {
+        const label = eligible ? 'duyệt' : 'thu hồi điều kiện';
+        if (!(await Swal.fire({ title: `Xác nhận ${label} tài xế?`, showCancelButton: true })).isConfirmed) return;
+        const res = await fetch(`/api/operators/${id}/status?eligible=${eligible}`, { method: 'PUT' });
+        if (!res.ok) return showRequestError(res, 'Không thể cập nhật trạng thái tài xế.');
+        await loadOperators();
+    }
+
+    async function loadMaintenances() {
+        const res = await fetch('/api/maintenances');
+        if (!res.ok) return showRequestError(res, 'Không thể tải lịch bảo trì.');
+        const entries = await res.json();
+        document.getElementById('maintenanceCount').innerText = entries.length;
+        document.getElementById('maintenanceRows').innerHTML = entries.map(m => `
+            <tr><td>${App.escape(m.machine?.name)}</td><td>${App.escape(m.machine?.owner?.fullName)}</td>
+                <td>${formatDate(m.startTime)}</td><td>${formatDate(m.endTime)}</td><td>${App.escape(m.description)}</td>
+                <td><span class="badge text-bg-${statusColor(m.status)}">${App.escape(m.status)}</span></td>
+                <td>${m.status === 'IN_PROGRESS' ? `<button class="btn btn-sm btn-success" onclick="completeMaintenance(${m.maintenanceId})">Hoàn tất</button>` : ''}</td></tr>`
+        ).join('') || '<tr><td colspan="7" class="text-center">Chưa có lịch bảo trì.</td></tr>';
+    }
+
+    async function completeMaintenance(id) {
+        const res = await fetch(`/api/maintenances/${id}/complete`, { method: 'PUT' });
+        if (!res.ok) return showRequestError(res, 'Không thể hoàn tất bảo trì.');
+        await Promise.all([loadMaintenances(), loadMachines()]);
+    }
+
+    function renderCharts(bookings) {
+        const counts = {};
+        const totals = {};
+        bookings.forEach(b => {
+            counts[b.status] = (counts[b.status] || 0) + 1;
+            const type = b.machine?.type || 'Khác';
+            totals[type] = (totals[type] || 0) + Number(b.totalFee || 0);
+        });
+        if (statusChart) statusChart.destroy();
+        if (revenueChart) revenueChart.destroy();
+        statusChart = new Chart(document.getElementById('statusChart'), {
+            type: 'doughnut', data: { labels: Object.keys(counts), datasets: [{ data: Object.values(counts) }] }
+        });
+        revenueChart = new Chart(document.getElementById('revenueChart'), {
+            type: 'bar', data: { labels: Object.keys(totals), datasets: [{ label: 'Tổng phí đơn (VNĐ)', data: Object.values(totals) }] }
+        });
+    }
+
+    async function exportBookings() {
+        const res = await fetch('/api/bookings');
+        if (!res.ok) return showRequestError(res, 'Không thể xuất dữ liệu.');
+        const bookings = await res.json();
+        const quote = value => `"${String(value ?? '').replaceAll('"', '""')}"`;
+        const rows = [['Mã đơn', 'Nông dân', 'Máy', 'Tài xế', 'Trạng thái', 'Bắt đầu', 'Kết thúc', 'Tổng phí'],
+            ...bookings.map(b => [b.bookingId, b.farmer?.fullName, b.machine?.name, b.operator?.user?.fullName || '',
+                b.status, b.startTime, b.endTime, b.totalFee])];
+        const url = URL.createObjectURL(new Blob(['\uFEFF' + rows.map(row => row.map(quote).join(',')).join('\r\n')],
+            { type: 'text/csv;charset=utf-8' }));
+        const link = document.createElement('a'); link.href = url; link.download = 'bao-cao-don-dat-may.csv'; link.click();
+        URL.revokeObjectURL(url);
+    }
+
+    async function showRequestError(response, fallback) {
+        Swal.fire('Không thực hiện được', await App.errorMessage(response, fallback), 'error');
+    }
+    function formatDate(value) { return value ? new Date(value).toLocaleString('vi-VN') : ''; }
+    function money(value) { return `${Number(value || 0).toLocaleString('vi-VN')} đ`; }
+    function statusColor(status) {
+        return ({ PENDING: 'warning', SCHEDULED: 'warning', CONFIRMED: 'primary', IN_PROGRESS: 'info',
+            RESERVED: 'warning', IN_MAINTENANCE: 'danger', COMPLETED: 'success', AVAILABLE: 'success',
+            CANCELLED: 'secondary' })[status] || 'secondary';
+    }
+</script>
+</body>
+</html>
